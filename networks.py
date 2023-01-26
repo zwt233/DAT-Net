@@ -8,11 +8,9 @@ Created on Thu Jan 26 20:56:06 2023
 import torch
 from torch_geometric.nn import global_mean_pool as gap, global_max_pool as gmp, global_add_pool as gsp
 import torch.nn.functional as F
-from layers import SGC_DAT2
+from layers import DAT
 from torch_geometric.utils import softmax
 from torch.nn import Linear
- 
-
 
 class new_readout3(torch.nn.Module):
     def __init__(self,in_channels: int):
@@ -29,6 +27,7 @@ class new_readout3(torch.nn.Module):
         v = softmax(v, batch)
         sv = torch.mul(v,x)
         return torch.cat([gmp(x, batch), gsp(sv, batch)], dim=1)
+    
 
 class Scalble_DAT_Net(torch.nn.Module):
     def __init__(self,args):
@@ -40,7 +39,7 @@ class Scalble_DAT_Net(torch.nn.Module):
         self.dropout_ratio2 = args.dropout_ratio2
         self.K = args.K
         
-        self.conv1 = SGC_DAT2(self.num_features, self.nhid, self.K)
+        self.conv1 = DAT(self.num_features, self.nhid, self.K)
         
         self.readout1 = new_readout3(self.nhid)
         
@@ -60,12 +59,11 @@ class Scalble_DAT_Net(torch.nn.Module):
         
     def forward(self, data):
         x, edge_index, batch = data.x, data.edge_index, data.batch
-        x = self.conv1(x, edge_index, batch, 0.5)
+        x = self.conv1(x, edge_index, batch)
         x = F.relu(x)
         x = F.dropout(x, p=self.dropout_ratio1, training=self.training)
         
         x3 = self.readout1(x,batch)
-        #x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim=1)
         
         x = F.relu(self.lin1(x3))
         x = F.dropout(x, p=self.dropout_ratio2, training=self.training)

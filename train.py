@@ -22,9 +22,9 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('--seed', type=int, default=777,
                     help='seed')
-parser.add_argument('--batch_size', type=int, default=64,
+parser.add_argument('--batch_size', type=int, default=128,
                     help='batch size')
-parser.add_argument('--lr', type=float, default=0.0005,  #0.0005
+parser.add_argument('--lr', type=float, default=0.005,  #0.0005
                     help='learning rate')
 parser.add_argument('--weight_decay', type=float, default=0.0001,
                     help='weight decay')
@@ -36,13 +36,13 @@ parser.add_argument('--dropout_ratio2', type=float, default=0.,
                     help='dropout ratio on MLP')
 parser.add_argument('--pooling_ratio', type=float, default=0.5, 
                     help='dropout ratio on MLP')
-parser.add_argument('--dataset', type=str, default='DD',
-                    help='DD/PROTEINS/NCI1/NCI109/Mutagenicity/ENZYMES')
+parser.add_argument('--dataset', type=str, default='PROTEINS',
+                    help='DD/PROTEINS/NCI1/NCI109/Mutagenicity')
 parser.add_argument('--epochs', type=int, default=10000,
                     help='maximum number of epochs')
 parser.add_argument('--patience', type=int, default=50,
                     help='patience for earlystopping')
-parser.add_argument('--K', type=int, default=3)
+parser.add_argument('--K', type=int, default=5)
     
 args = parser.parse_args()
 args.device = 'cpu'
@@ -82,9 +82,9 @@ def train(model):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     min_loss = 1e10
     patience = 0
-    train_time = []
+    time_0 = time.time()
     for epoch in range(args.epochs):
-        time_0 = time.time()
+        
         model.train()
         for i, data in enumerate(train_loader):
             data = data.to(args.device)
@@ -94,12 +94,10 @@ def train(model):
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-        time_1 = time.time()
-        train_time.append(time_1-time_0)
         
         val_acc,val_loss = test(model,val_loader)
         val_list.append(val_acc)
-        print("Validation loss:{}\taccuracy:{}".format(val_loss,val_acc))
+        print("Validation loss:{}\taccuracy:{}".format(val_loss,val_acc), 'time: {:.6f}s'.format(time.time() - time_0))
         if val_loss < min_loss:
             torch.save(model.state_dict(),'latest2.pth')
             print("Model saved at epoch{}".format(epoch))

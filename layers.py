@@ -59,7 +59,7 @@ def gcn_norm(r, edge_index, edge_weight=None, num_nodes=None, improved=False,
         return edge_index, deg_inv_sqrt_left[row] * edge_weight * deg_inv_sqrt_right[col]
 
 
-class SGC_DAT2(MessagePassing):
+class DAT(MessagePassing):
 
     def __init__(self, in_channels: int, out_channels: int, K: int = 1, 
                  add_self_loops: bool = True, 
@@ -70,10 +70,9 @@ class SGC_DAT2(MessagePassing):
         self.out_channels = out_channels
         self.K = K
         self.dropout = nn.Dropout(0.)
-        self.pre_dropout = False
         self.add_self_loops = add_self_loops
         self.lin1 = Linear(in_channels, out_channels, bias=bias)
-        self.lin2 = Linear(out_channels*3, out_channels, bias=bias)
+        self.lin2 = Linear(out_channels*2, out_channels, bias=bias)
         self.att = Linear(out_channels, 1, bias=bias)  #Linear(in_channels, 1, bias=bias)
         self.act = nn.Sigmoid()
         self.reset_parameters()
@@ -82,41 +81,31 @@ class SGC_DAT2(MessagePassing):
         self.lin1.reset_parameters()
         self.lin2.reset_parameters()
         self.att.reset_parameters()
-    #DAT2
-    def forward(self, x: Tensor, edge_index: Adj,batch, r,
+
+    def forward(self, x: Tensor, edge_index: Adj,batch, 
                 edge_weight: OptTensor = None) -> Tensor:
-        #r=0.5
         if isinstance(edge_index, Tensor):
             edge_index, edge_weight = gcn_norm(  # yapf: disable
-                r,edge_index, edge_weight, x.size(self.node_dim), False,
+                0.5,edge_index, edge_weight, x.size(self.node_dim), False,
                 self.add_self_loops, dtype=x.dtype)
         elif isinstance(edge_index, SparseTensor):
             edge_index = gcn_norm(  # yapf: disable
-                r,edge_index, edge_weight, x.size(self.node_dim), False,
+                0.5,edge_index, edge_weight, x.size(self.node_dim), False,
                 self.add_self_loops, dtype=x.dtype)
-        #print("x",x.shape)
-        X = [self.lin1(x)]
-        att = self.att(X[-1])
-        w = softmax(self.act(att), batch).reshape(-1,1)  #做成sparse tensor
-        W = [w]
+        X = [x]
         for k in range(self.K):
             x = self.propagate(edge_index, x=x, edge_weight=edge_weight,size=None)
-            X.append(self.lin1(x))
-            att = self.att(X[-1])
-            W.append(softmax(self.act(att), batch).reshape(-1,1))
-        W = torch.cat(W, dim=1)
-        X = torch.stack(X, dim=2)
-        W = W.unsqueeze(dim=1)
+            X.append(x)
         
-        x1 = [torch.mul(X,W).sum(dim=2), X.mean(dim=2), X.max(dim=2).values]
-        
-        #x1 = [torch.mul(X,W).sum(dim=2), X.max(dim=2).values]
-        #x1 = [X.mean(dim=2), X.max(dim=2).values]
+        X = torch.stack(X, dim=0)
+        X = self.lin1(X)
+        x_a = self.act(self.att(X))
+        W = softmax(x_a, batch, dim=1)#.reshape(-1,1)
+        x_w = torch.mul(X,W)
+        x1 = [x_w.sum(dim=0), x_w.max(dim=0).values]
         x1 = torch.cat(x1,dim=1)
-        
         return self.lin2(x1)
         
-
     def message(self, x_j: Tensor, edge_weight: Tensor) -> Tensor:
         return edge_weight.view(-1, 1) * x_j
 
@@ -126,3 +115,12 @@ class SGC_DAT2(MessagePassing):
     def __repr__(self) -> str:
         return (f'{self.__class__.__name__}({self.in_channels}, '
                 f'{self.out_channels}, K={self.K})')
+
+    
+    
+    
+    
+    
+    
+    
+    
